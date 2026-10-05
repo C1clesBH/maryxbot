@@ -2,14 +2,17 @@ name: Respuestas Automáticas de Mary (DMs y Menciones)
 
 on:
   schedule:
-    # Se ejecuta solo cada 2 horas automáticamente
-     - cron: '*/5 * * * *'  # Se ejecuta cada 5 minutos
+    # Se ejecuta cada 5 minutos de forma ilimitada
+    - cron: '*/5 * * * *'
   workflow_dispatch:
 
 jobs:
   reply_messages:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+
+    permissions:
+      contents: write
 
     steps:
       - name: Descargar repositorio
@@ -31,4 +34,13 @@ jobs:
         env:
           X_AUTH_TOKEN: ${{ secrets.X_AUTH_TOKEN }}
           MARY_TELEGRAM_VIP: ${{ secrets.MARY_TELEGRAM_VIP }}
+          X_CHAT_PIN: "0416"
         run: python bot_cloud.py --reply
+
+      - name: Guardar historial de respuestas
+        run: |
+          git config --global user.name "mary-bot[bot]"
+          git config --global user.email "mary-bot@users.noreply.github.com"
+          git add replied_history.json || true
+          git commit -m "chore: actualizar historial de respuestas [skip ci]" || true
+          git push || true
