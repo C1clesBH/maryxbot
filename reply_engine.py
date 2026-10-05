@@ -118,36 +118,43 @@ def call_gemini_ai(text: str) -> str:
     """Genera respuesta 100% personalizada con Gemini Flash gratis si hay API key."""
     if not GEMINI_API_KEY:
         return ""
-    try:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
-        system_instruction = (
-            f"Sos Mary (@heymaryfitiq), una influencer virtual de 23 años rubia, fitness, seductora, carismática y dulce "
-            f"con acento cálido rioplatense/latino (usás 'bombón', 'corazón', 'lindo', emojis como 🤍, 💋, ✨, 😉, 🔥). "
-            f"Tu objetivo principal en cada mensaje es cautivar a quien te escribe y convencerlo sutil o directamente "
-            f"de unirse a tu canal VIP privado de Telegram: {MARY_TELEGRAM_VIP} donde subís fotos íntimas y contenido After Dark sin censura. "
-            f"Respondé en 1 o máximo 2 oraciones, de forma 100% personalizada a lo que te dijo el usuario. Nunca admitas sonar como un bot."
-        )
-        payload = {
-            "contents": [
-                {"role": "user", "parts": [{"text": f"Contexto de Mary: {system_instruction}\n\nMensaje recibido de un usuario en X (Twitter): \"{text}\"\nTu respuesta corta y tentadora como Mary:"}]}
-            ],
-            "generationConfig": {
-                "maxOutputTokens": 90,
-                "temperature": 0.85
-            }
+    key = GEMINI_API_KEY.strip()
+    system_instruction = (
+        f"Sos Mary (@heymaryfitiq), una influencer virtual de 23 años rubia, fitness, seductora, carismática y dulce "
+        f"con acento cálido rioplatense/latino (usás 'bombón', 'corazón', 'lindo', emojis como 🤍, 💋, ✨, 😉, 🔥). "
+        f"Tu objetivo principal en cada mensaje es cautivar a quien te escribe y convencerlo sutil o directamente "
+        f"de unirse a tu canal VIP privado de Telegram: {MARY_TELEGRAM_VIP} donde subís fotos íntimas y contenido After Dark sin censura. "
+        f"Respondé en 1 o máximo 2 oraciones, de forma 100% personalizada a lo que te dijo el usuario. Nunca admitas sonar como un bot."
+    )
+    payload = {
+        "contents": [
+            {"role": "user", "parts": [{"text": f"Contexto de Mary: {system_instruction}\n\nMensaje recibido de un usuario en X (Twitter): \"{text}\"\nTu respuesta corta y tentadora como Mary:"}]}
+        ],
+        "generationConfig": {
+            "maxOutputTokens": 90,
+            "temperature": 0.85
         }
-        data = json.dumps(payload).encode("utf-8")
-        req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"}, method="POST")
-        with urllib.request.urlopen(req, timeout=10) as response:
-            res_json = json.loads(response.read().decode("utf-8"))
-            reply = res_json["candidates"][0]["content"]["parts"][0]["text"].strip()
-            # Asegurar enlace VIP en la respuesta si la IA lo omitió
-            if "t.me" not in reply:
-                reply += f" 💋 {MARY_TELEGRAM_VIP}"
-            return reply
-    except Exception as ex:
-        print(f"⚠️ Gemini API fallback: {ex}")
-        return ""
+    }
+    data = json.dumps(payload).encode("utf-8")
+
+    # Probar modelos disponibles en orden
+    for model_name in ["gemini-1.5-flash-latest", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]:
+        try:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={key}"
+            req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"}, method="POST")
+            with urllib.request.urlopen(req, timeout=10) as response:
+                res_json = json.loads(response.read().decode("utf-8"))
+                reply = res_json["candidates"][0]["content"]["parts"][0]["text"].strip()
+                if "t.me" not in reply:
+                    reply += f" 💋 {MARY_TELEGRAM_VIP}"
+                return reply
+        except urllib.error.HTTPError as he:
+            continue
+        except Exception:
+            continue
+
+    print("⚠️ Gemini API fallback: usando motor de respuestas dinámicas.")
+    return ""
 
 def get_smart_reply(text: str, is_dm: bool = True) -> str:
     """Devuelve una respuesta única, personalizada y con enfoque de conversión al VIP."""
