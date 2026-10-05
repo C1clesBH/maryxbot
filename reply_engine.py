@@ -9,7 +9,7 @@ from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent
 HISTORY_FILE = BASE_DIR / "replied_history.json"
-MARY_TELEGRAM_VIP = os.getenv("MARY_TELEGRAM_VIP", "https://t.me/MaryVipOficialBot")
+MARY_TELEGRAM_VIP = os.getenv("MARY_TELEGRAM_VIP", "https://t.me/+EFV9kcyVTYEwMDVh")
 
 COMPLIMENT_REPLIES = [
     "¡Ay, gracias corazón! 🤍 Me subiste el ánimo para todo el día ✨",
@@ -68,7 +68,7 @@ def save_history(history: dict):
 def get_smart_reply(text: str, is_dm: bool = False) -> str:
     t = text.lower().strip()
 
-    if any(k in t for k in ["vip", "telegram", "foto", "pack", "privad", "only", "fanvue", "desnuda", "sexy", "intima", "íntima"]):
+    if any(k in t for k in ["vip", "telegram", "foto", "pack", "privad", "only", "fanvue", "desnuda", "sexy", "intima", "íntima", "canal", "link", "enlace", "entrar", "precio", "estrellas", "stars", "cuanto", "cuánto", "contenido", "acceso", "after dark", "ver más", "ver mas"]):
         return random.choice(VIP_PROMO_REPLIES).format(telegram_url=MARY_TELEGRAM_VIP)
 
     if any(k in t for k in ["hermosa", "linda", "diosa", "guapa", "reina", "bebé", "fuego", "preciosa", "divina", "bombón", "bombon"]):

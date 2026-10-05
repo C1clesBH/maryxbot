@@ -143,21 +143,32 @@ def reply_all():
             # 2. DMs
             page.goto("https://x.com/messages", timeout=45000)
             page.wait_for_load_state("domcontentloaded")
-            time.sleep(4)
+            time.sleep(5)
 
             unlock_chat_if_needed(page)
 
-            convos = page.locator('[data-testid="conversation"]')
-            count_c = min(convos.count(), 4)
+            convos = page.locator('a[href*="/i/chat/"]')
+            count_c = min(convos.count(), 5)
+            print(f"[*] Conversaciones detectadas en bandeja: {convos.count()}")
+
             for j in range(count_c):
                 c = convos.nth(j)
-                txt_c = c.inner_text()
-                h_c = hash_text(txt_c[:100])
+                txt_c = c.inner_text().strip()
+                href = c.get_attribute("href") or f"chat_{j}"
+
+                # Si el último mensaje es de Mary ("You:"), ya fue respondido
+                lines = [l.strip() for l in txt_c.splitlines() if l.strip()]
+                last_line = lines[-1] if lines else ""
+                if last_line.startswith("You:") or "You:" in txt_c:
+                    continue
+
+                h_c = hash_text(f"{href}_{txt_c}")
                 if h_c in history["dms"]:
                     continue
 
+                print(f"[*] Nuevo mensaje no respondido en {href}:\n    \"{txt_c.replace(chr(10), ' | ')}\"")
                 c.click()
-                time.sleep(2)
+                time.sleep(3)
                 unlock_chat_if_needed(page)
 
                 composer = page.get_by_placeholder("Message").first
@@ -167,14 +178,17 @@ def reply_all():
                     composer = page.locator('[role="textbox"]').last
 
                 if composer.count() > 0:
-                    reply_dm = get_smart_reply(txt_c, is_dm=True)
+                    chat_panel = page.locator('[data-testid="dm-conversation-panel"]').first
+                    full_text = chat_panel.inner_text() if chat_panel.count() > 0 else txt_c
+
+                    reply_dm = get_smart_reply(full_text, is_dm=True)
                     composer.click()
                     time.sleep(0.5)
                     composer.fill(reply_dm)
                     time.sleep(1)
                     page.keyboard.press("Enter")
-                    time.sleep(3)
-                    print(f"✅ [DM respondido]: {reply_dm}")
+                    time.sleep(4)
+                    print(f"✅ [DM respondido con éxito]: {reply_dm}")
                     history["dms"].append(h_c)
                     save_history(history)
                     time.sleep(2)
