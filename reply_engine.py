@@ -114,8 +114,28 @@ def save_history(history: dict):
     except Exception as e:
         print(f"[!] Error guardando historial: {e}")
 
+def get_working_gemini_model(key: str) -> str:
+    """Consulta la lista de modelos activos para esta key en Google AI Studio."""
+    try:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models?key={key}"
+        req = urllib.request.Request(url, headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=8) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            models = data.get("models", [])
+            supported = [m["name"] for m in models if "generateContent" in m.get("supportedGenerationMethods", [])]
+            # Priorizar modelos Flash o 2.0 / 2.5 / 1.5
+            for pref in ["flash", "2.0", "2.5", "pro"]:
+                for m in supported:
+                    if pref in m.lower():
+                        return m
+            if supported:
+                return supported[0]
+    except Exception as e:
+        print(f"⚠️ Consulta de modelos Gemini: {e}")
+    return "models/gemini-2.0-flash"
+
 def call_gemini_ai(text: str) -> str:
-    """Genera respuesta 100% personalizada con Gemini Flash gratis si hay API key."""
+    """Genera respuesta 100% personalizada con Gemini AI si hay API key."""
     if not GEMINI_API_KEY:
         return ""
     key = GEMINI_API_KEY.strip()
@@ -124,7 +144,7 @@ def call_gemini_ai(text: str) -> str:
         f"con acento cálido rioplatense/latino (usás 'bombón', 'corazón', 'lindo', emojis como 🤍, 💋, ✨, 😉, 🔥). "
         f"Tu objetivo principal en cada mensaje es cautivar a quien te escribe y convencerlo sutil o directamente "
         f"de unirse a tu canal VIP privado de Telegram: {MARY_TELEGRAM_VIP} donde subís fotos íntimas y contenido After Dark sin censura. "
-        f"Respondé en 1 o máximo 2 oraciones, de forma 100% personalizada a lo que te dijo el usuario. Nunca admitas sonar como un bot."
+        f"Respondé en 1 o máximo 2 oraciones cortas, de forma 100% personalizada a lo que te dijo el usuario. Nunca admitas sonar como un bot."
     )
     payload = {
         "contents": [
@@ -137,16 +157,22 @@ def call_gemini_ai(text: str) -> str:
     }
     data = json.dumps(payload).encode("utf-8")
 
-    # Probar modelos disponibles en orden
-    for model_name in ["gemini-1.5-flash-latest", "gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-pro"]:
+    chosen_model = get_working_gemini_model(key)
+    if not chosen_model.startswith("models/"):
+        chosen_model = f"models/{chosen_model}"
+
+    # Lista de modelos a intentar: el detectado dinámicamente primero, luego respaldos
+    models_to_try = [chosen_model, "models/gemini-2.0-flash", "models/gemini-1.5-flash-latest", "models/gemini-pro"]
+    for m_name in list(dict.fromkeys(models_to_try)):
         try:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={key}"
+            url = f"https://generativelanguage.googleapis.com/v1beta/{m_name}:generateContent?key={key}"
             req = urllib.request.Request(url, data=data, headers={"Content-Type": "application/json"}, method="POST")
             with urllib.request.urlopen(req, timeout=10) as response:
                 res_json = json.loads(response.read().decode("utf-8"))
                 reply = res_json["candidates"][0]["content"]["parts"][0]["text"].strip()
                 if "t.me" not in reply:
                     reply += f" 💋 {MARY_TELEGRAM_VIP}"
+                print(f"✨ [Gemini IA respondió con modelo {m_name}]")
                 return reply
         except urllib.error.HTTPError as he:
             continue
