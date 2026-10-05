@@ -12,6 +12,12 @@ import hashlib
 from pathlib import Path
 from playwright.sync_api import sync_playwright
 
+if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 from tweets_data import get_suggested_tweet_for_now, get_random_tweet
 from reply_engine import get_smart_reply, load_history, save_history
 
@@ -25,10 +31,11 @@ def get_browser_context(p):
     if not auth_token:
         raise ValueError("❌ Falta la variable de entorno X_AUTH_TOKEN en GitHub Secrets.")
 
-    browser = p.chromium.launch(
-        headless=True,
-        args=["--disable-blink-features=AutomationControlled", "--no-sandbox"]
-    )
+    launch_args = ["--disable-blink-features=AutomationControlled", "--no-sandbox"]
+    try:
+        browser = p.chromium.launch(headless=True, args=launch_args)
+    except Exception:
+        browser = p.chromium.launch(headless=True, channel="chrome", args=launch_args)
     context = browser.new_context(
         viewport={"width": 1280, "height": 800},
         user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
@@ -83,24 +90,22 @@ def post_tweet(category: str = "now"):
         finally:
             browser.close()
 
-def unlock_chat_if_needed(page, pin: str = None, timeout: int = 15):
+def unlock_chat_if_needed(page, pin: str = None, timeout: int = 10):
     pin = pin or os.getenv("X_CHAT_PIN", "0416")
     start = time.time()
     while time.time() - start < timeout:
         inputs = page.locator("input").all()
-        has_passcode = page.locator("text=Enter Passcode").count() > 0 or len(inputs) == 4
-        if has_passcode and len(inputs) == 4:
+        has_passcode = page.locator("text=Enter Passcode").count() > 0 or (len(inputs) == 4 and page.locator('[data-testid="dmComposerTextInput"]').count() == 0)
+        if has_passcode and len(inputs) >= 4:
             print(f"[*] Pantalla de Passcode detectada. Ingresando clave {pin}...")
             for i in range(4):
                 inputs[i].click()
                 inputs[i].fill(pin[i])
                 time.sleep(0.3)
             print(f"[+] PIN {pin} ingresado con éxito.")
-            time.sleep(5)
+            time.sleep(4)
             return True
-        if page.locator('a[href*="/i/chat/"]').count() > 0:
-            return False
-        time.sleep(1)
+        time.sleep(0.8)
     return False
 
 def reply_all():
@@ -148,12 +153,18 @@ def reply_all():
             # 2. DMs (Bandeja principal)
             page.goto("https://x.com/messages", timeout=45000)
             page.wait_for_load_state("domcontentloaded")
-            time.sleep(5)
+            time.sleep(4)
 
             unlock_chat_if_needed(page)
 
+            # Esperar a que cargue la lista de conversaciones
+            try:
+                page.locator('a[href*="/i/chat/"]').first.wait_for(state="visible", timeout=12000)
+            except Exception:
+                time.sleep(3)
+
             convos = page.locator('a[href*="/i/chat/"]')
-            count_c = min(convos.count(), 5)
+            count_c = min(convos.count(), 6)
             print(f"[*] Conversaciones detectadas en bandeja: {convos.count()}")
 
             for j in range(count_c):
@@ -161,17 +172,17 @@ def reply_all():
                 txt_c = c.inner_text().strip()
                 href = c.get_attribute("href") or f"chat_{j}"
 
-                # Si el último mensaje es de Mary ("You:"), ya fue respondido
+                # Si el último mensaje es de Mary ("You:" o "Tú:"), ya fue respondido
                 lines = [l.strip() for l in txt_c.splitlines() if l.strip()]
                 last_line = lines[-1] if lines else ""
-                if last_line.startswith("You:") or "You:" in txt_c:
+                if last_line.startswith("You:") or last_line.startswith("Tú:") or "You:" in last_line or "Tú:" in last_line:
                     continue
 
                 h_c = hash_text(f"{href}_{txt_c}")
                 if h_c in history["dms"]:
                     continue
 
-                print(f"[*] Nuevo mensaje no respondido en {href}:\n    \"{txt_c.replace(chr(10), ' | ')}\"")
+                print(f"[*] Nuevo mensaje pendiente en {href}:\n    \"{last_line}\"")
                 c.click()
                 time.sleep(3)
                 unlock_chat_if_needed(page)
@@ -183,16 +194,17 @@ def reply_all():
                     composer = page.locator('[role="textbox"]').last
 
                 if composer.count() > 0:
-                    chat_panel = page.locator('[data-testid="dm-conversation-panel"]').first
-                    full_text = chat_panel.inner_text() if chat_panel.count() > 0 else txt_c
-
-                    reply_dm = get_smart_reply(full_text, is_dm=True)
+                    reply_dm = get_smart_reply(last_line, is_dm=True)
                     composer.click()
                     time.sleep(0.5)
                     composer.fill(reply_dm)
                     time.sleep(1)
                     page.keyboard.press("Enter")
-                    time.sleep(4)
+                    time.sleep(1)
+                    send_btn = page.locator('button[aria-label="Send"], button[data-testid="sendDM"], [data-testid="dmComposerSendButton"]').first
+                    if send_btn.count() > 0 and send_btn.is_visible():
+                        send_btn.click()
+                    time.sleep(3)
                     print(f"✅ [DM respondido con éxito]: {reply_dm}")
                     history["dms"].append(h_c)
                     save_history(history)
@@ -243,15 +255,19 @@ def reply_all():
                             composer = page.locator('[role="textbox"]').last
 
                         if composer.count() > 0:
-                            chat_panel = page.locator('[data-testid="dm-conversation-panel"]').first
-                            full_text = chat_panel.inner_text() if chat_panel.count() > 0 else r_txt
-                            reply_text = get_smart_reply(full_text, is_dm=True)
+                            lines_r = [l.strip() for l in r_txt.splitlines() if l.strip()]
+                            last_msg = lines_r[-1] if lines_r else r_txt
+                            reply_text = get_smart_reply(last_msg, is_dm=True)
                             composer.click()
                             time.sleep(0.5)
                             composer.fill(reply_text)
                             time.sleep(1)
                             page.keyboard.press("Enter")
-                            time.sleep(4)
+                            time.sleep(1)
+                            send_btn = page.locator('button[aria-label="Send"], button[data-testid="sendDM"], [data-testid="dmComposerSendButton"]').first
+                            if send_btn.count() > 0 and send_btn.is_visible():
+                                send_btn.click()
+                            time.sleep(3)
                             print(f"✅ [Solicitud respondida]: {reply_text}")
                             history["dms"].append(h_r)
                             save_history(history)
