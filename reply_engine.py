@@ -123,8 +123,8 @@ def get_working_gemini_model(key: str) -> str:
             data = json.loads(resp.read().decode("utf-8"))
             models = data.get("models", [])
             supported = [m["name"] for m in models if "generateContent" in m.get("supportedGenerationMethods", [])]
-            # Priorizar modelos Flash o 2.0 / 2.5 / 1.5
-            for pref in ["flash", "2.0", "2.5", "pro"]:
+            # Priorizar modelos Flash Lite y activos
+            for pref in ["3.5-flash-lite", "3.1-flash-lite", "3.5-flash", "flash-lite", "flash"]:
                 for m in supported:
                     if pref in m.lower():
                         return m
@@ -132,7 +132,7 @@ def get_working_gemini_model(key: str) -> str:
                 return supported[0]
     except Exception as e:
         print(f"⚠️ Consulta de modelos Gemini: {e}")
-    return "models/gemini-2.0-flash"
+    return "models/gemini-3.5-flash-lite"
 
 def call_gemini_ai(text: str) -> str:
     """Genera respuesta 100% personalizada con Gemini AI si hay API key."""
@@ -161,8 +161,8 @@ def call_gemini_ai(text: str) -> str:
     if not chosen_model.startswith("models/"):
         chosen_model = f"models/{chosen_model}"
 
-    # Lista de modelos a intentar: el detectado dinámicamente primero, luego respaldos
-    models_to_try = [chosen_model, "models/gemini-2.0-flash", "models/gemini-1.5-flash-latest", "models/gemini-pro"]
+    # Lista de modelos a intentar en orden de disponibilidad confirmada
+    models_to_try = [chosen_model, "models/gemini-3.5-flash-lite", "models/gemini-3.1-flash-lite", "models/gemini-3.5-flash", "models/gemini-flash-lite-latest"]
     for m_name in list(dict.fromkeys(models_to_try)):
         try:
             url = f"https://generativelanguage.googleapis.com/v1beta/{m_name}:generateContent?key={key}"
