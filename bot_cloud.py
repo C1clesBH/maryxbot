@@ -259,14 +259,41 @@ def reply_all():
         finally:
             browser.close()
 
+def reply_loop(total_minutes: int = 18, interval_seconds: int = 120):
+    print(f"\n🔄 [CLOUD LOOP] Vigilante activo: revisando cada {interval_seconds}s durante {total_minutes} minutos...")
+    start_time = time.time()
+    max_secs = total_minutes * 60
+    iteration = 1
+
+    while (time.time() - start_time) < max_secs:
+        print(f"\n--- [Ronda {iteration}] Hora: {time.strftime('%H:%M:%S')} UTC ---")
+        try:
+            reply_all()
+        except Exception as e:
+            print(f"⚠️ Error en ronda {iteration}: {e}")
+
+        elapsed = time.time() - start_time
+        remaining = max_secs - elapsed
+        if remaining > interval_seconds:
+            print(f"⏳ Esperando {interval_seconds}s para la próxima revisión (restan {int(remaining // 60)} min)...")
+            time.sleep(interval_seconds)
+            iteration += 1
+        else:
+            print("🏁 Turno de vigilancia completado. Dando paso al siguiente ciclo programado.")
+            break
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--post", nargs="?", const="now", choices=["now", "morning", "afternoon", "night", "vip", "poll"])
     parser.add_argument("--reply", action="store_true")
+    parser.add_argument("--loop", type=int, default=0, help="Minutos de duración del bucle activo (ej: 18)")
 
     args = parser.parse_args()
     if args.reply:
-        reply_all()
+        if args.loop > 0:
+            reply_loop(total_minutes=args.loop, interval_seconds=120)
+        else:
+            reply_all()
     elif args.post:
         cat = "night" if args.post == "vip" else ("poll" if args.post == "poll" else args.post)
         post_tweet(category=cat)
