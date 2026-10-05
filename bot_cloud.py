@@ -140,7 +140,7 @@ def reply_all():
                     save_history(history)
                     time.sleep(2)
 
-            # 2. DMs
+            # 2. DMs (Bandeja principal)
             page.goto("https://x.com/messages", timeout=45000)
             page.wait_for_load_state("domcontentloaded")
             time.sleep(5)
@@ -192,6 +192,67 @@ def reply_all():
                     history["dms"].append(h_c)
                     save_history(history)
                     time.sleep(2)
+
+            # 3. Solicitudes de mensajes (Personas nuevas que no seguimos)
+            print("\n📬 [CLOUD] Revisando Solicitudes de Mensajes (cuentas nuevas)...")
+            for req_url in ["https://x.com/i/chat/requests", "https://x.com/i/chat/requests/other"]:
+                try:
+                    page.goto(req_url, timeout=45000)
+                    page.wait_for_load_state("domcontentloaded")
+                    time.sleep(4)
+                    unlock_chat_if_needed(page)
+
+                    dismiss = page.locator("text=Dismiss").first
+                    if dismiss.count() > 0:
+                        dismiss.click()
+                        time.sleep(1)
+
+                    req_links = page.locator('a[href*="/i/chat/"]')
+                    total_r = req_links.count()
+                    for r_idx in range(min(total_r, 4)):
+                        req_el = req_links.nth(r_idx)
+                        r_txt = req_el.inner_text().strip()
+                        r_href = req_el.get_attribute("href") or f"req_{r_idx}"
+                        h_r = hash_text(f"{r_href}_{r_txt}")
+                        if h_r in history["dms"]:
+                            continue
+
+                        req_el.click()
+                        time.sleep(3)
+                        unlock_chat_if_needed(page)
+
+                        accept_btn = page.get_by_role("button", name="Accept")
+                        if accept_btn.count() == 0:
+                            accept_btn = page.locator('button:has-text("Accept")')
+
+                        if accept_btn.count() > 0:
+                            print(f"[+] Aceptando solicitud de nuevo usuario en {r_href}...")
+                            accept_btn.first.click()
+                            time.sleep(3)
+                            unlock_chat_if_needed(page)
+
+                        composer = page.get_by_placeholder("Message").first
+                        if composer.count() == 0:
+                            composer = page.locator('[data-testid="dmComposerTextInput"]').first
+                        if composer.count() == 0:
+                            composer = page.locator('[role="textbox"]').last
+
+                        if composer.count() > 0:
+                            chat_panel = page.locator('[data-testid="dm-conversation-panel"]').first
+                            full_text = chat_panel.inner_text() if chat_panel.count() > 0 else r_txt
+                            reply_text = get_smart_reply(full_text, is_dm=True)
+                            composer.click()
+                            time.sleep(0.5)
+                            composer.fill(reply_text)
+                            time.sleep(1)
+                            page.keyboard.press("Enter")
+                            time.sleep(4)
+                            print(f"✅ [Solicitud respondida]: {reply_text}")
+                            history["dms"].append(h_r)
+                            save_history(history)
+                            time.sleep(2)
+                except Exception as ex_r:
+                    print(f"⚠️ Error en solicitudes ({req_url}): {ex_r}")
 
         except Exception as e:
             print(f"⚠️ Error en revisión de mensajes: {e}")
