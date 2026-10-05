@@ -36,10 +36,12 @@ jobs:
 
       - name: Vigilancia continua de mensajes (escaneo cada 2 minutos)
         env:
+          PYTHONUNBUFFERED: "1"
           X_AUTH_TOKEN: ${{ secrets.X_AUTH_TOKEN }}
           MARY_TELEGRAM_VIP: ${{ secrets.MARY_TELEGRAM_VIP }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           X_CHAT_PIN: "0416"
-        run: python bot_cloud.py --reply --loop 18
+        run: python -u bot_cloud.py --reply --loop 18
 
       - name: Guardar historial de respuestas
         if: always()

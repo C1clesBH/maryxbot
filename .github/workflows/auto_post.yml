@@ -2,11 +2,24 @@ name: Publicador Automático de Mary (X)
 
 on:
   schedule:
+    # Horarios en UTC (Argentina es UTC-3)
     - cron: '30 10 * * *'  # 07:30 AM Argentina (Fitness / Gym)
     - cron: '00 17 * * *'  # 14:00 PM Argentina (Streetwear / Café)
     - cron: '30 21 * * *'  # 18:30 PM Argentina (Pregunta / Engagement)
     - cron: '30 01 * * *'  # 22:30 PM Argentina (After Dark / VIP)
   workflow_dispatch:
+    inputs:
+      category:
+        description: 'Categoría a publicar'
+        required: false
+        default: 'now'
+        type: choice
+        options:
+          - now
+          - morning
+          - afternoon
+          - night
+          - poll
 
 jobs:
   post_tweet:
@@ -33,4 +46,9 @@ jobs:
         env:
           X_AUTH_TOKEN: ${{ secrets.X_AUTH_TOKEN }}
           MARY_TELEGRAM_VIP: ${{ secrets.MARY_TELEGRAM_VIP }}
-        run: python bot_cloud.py --post now
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            python bot_cloud.py --post ${{ inputs.category }}
+          else
+            python bot_cloud.py --post now
+          fi
