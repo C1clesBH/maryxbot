@@ -11,7 +11,7 @@ BASE_DIR = Path(__file__).resolve().parent
 ASSETS_IMG_DIR = BASE_DIR / "assets" / "img"
 
 MARY_WEB_URL = os.getenv("MARY_WEB_URL", "https://tu-web.com")
-MARY_TELEGRAM_VIP = os.getenv("MARY_TELEGRAM_VIP", "https://t.me/MaryVipOficialBot")
+MARY_TELEGRAM_VIP = os.getenv("MARY_TELEGRAM_VIP", "https://t.me/+EFV9kcyVTYEwMDVh")
 MARY_FANVUE_URL = os.getenv("MARY_FANVUE_URL", "https://fanvue.com/mary")
 
 MORNING_TWEETS = [

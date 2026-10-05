@@ -83,20 +83,25 @@ def post_tweet(category: str = "now"):
         finally:
             browser.close()
 
-def unlock_chat_if_needed(page, pin: str = None):
+def unlock_chat_if_needed(page, pin: str = None, timeout: int = 15):
     pin = pin or os.getenv("X_CHAT_PIN", "0416")
-    try:
+    start = time.time()
+    while time.time() - start < timeout:
         inputs = page.locator("input").all()
-        if len(inputs) == 4 or page.locator("text=Enter Passcode").count() > 0:
+        has_passcode = page.locator("text=Enter Passcode").count() > 0 or len(inputs) == 4
+        if has_passcode and len(inputs) == 4:
             print(f"[*] Pantalla de Passcode detectada. Ingresando clave {pin}...")
-            for i in range(min(4, len(inputs))):
+            for i in range(4):
                 inputs[i].click()
                 inputs[i].fill(pin[i])
                 time.sleep(0.3)
             print(f"[+] PIN {pin} ingresado con éxito.")
-            time.sleep(3)
-    except Exception as e:
-        print(f"⚠️ Error al verificar/ingresar PIN: {e}")
+            time.sleep(5)
+            return True
+        if page.locator('a[href*="/i/chat/"]').count() > 0:
+            return False
+        time.sleep(1)
+    return False
 
 def reply_all():
     print("\n💬 [CLOUD] Revisando menciones y DMs pendientes...")
