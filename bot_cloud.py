@@ -83,6 +83,21 @@ def post_tweet(category: str = "now"):
         finally:
             browser.close()
 
+def unlock_chat_if_needed(page, pin: str = None):
+    pin = pin or os.getenv("X_CHAT_PIN", "0416")
+    try:
+        inputs = page.locator("input").all()
+        if len(inputs) == 4 or page.locator("text=Enter Passcode").count() > 0:
+            print(f"[*] Pantalla de Passcode detectada. Ingresando clave {pin}...")
+            for i in range(min(4, len(inputs))):
+                inputs[i].click()
+                inputs[i].fill(pin[i])
+                time.sleep(0.3)
+            print(f"[+] PIN {pin} ingresado con éxito.")
+            time.sleep(3)
+    except Exception as e:
+        print(f"⚠️ Error al verificar/ingresar PIN: {e}")
+
 def reply_all():
     print("\n💬 [CLOUD] Revisando menciones y DMs pendientes...")
     history = load_history()
@@ -130,8 +145,10 @@ def reply_all():
             page.wait_for_load_state("domcontentloaded")
             time.sleep(4)
 
+            unlock_chat_if_needed(page)
+
             convos = page.locator('[data-testid="conversation"]')
-            count_c = min(convos.count(), 3)
+            count_c = min(convos.count(), 4)
             for j in range(count_c):
                 c = convos.nth(j)
                 txt_c = c.inner_text()
@@ -141,16 +158,21 @@ def reply_all():
 
                 c.click()
                 time.sleep(2)
-                composer = page.locator('[data-testid="dmComposerTextInput"]').first
+                unlock_chat_if_needed(page)
+
+                composer = page.get_by_placeholder("Message").first
+                if composer.count() == 0:
+                    composer = page.locator('[data-testid="dmComposerTextInput"]').first
+                if composer.count() == 0:
+                    composer = page.locator('[role="textbox"]').last
+
                 if composer.count() > 0:
                     reply_dm = get_smart_reply(txt_c, is_dm=True)
+                    composer.click()
+                    time.sleep(0.5)
                     composer.fill(reply_dm)
                     time.sleep(1)
-                    send_btn = page.locator('[data-testid="dmComposerSendButton"]').first
-                    if send_btn.count() > 0:
-                        send_btn.click()
-                    else:
-                        composer.press("Enter")
+                    page.keyboard.press("Enter")
                     time.sleep(3)
                     print(f"✅ [DM respondido]: {reply_dm}")
                     history["dms"].append(h_c)
