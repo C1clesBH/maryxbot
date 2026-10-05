@@ -1,0 +1,36 @@
+name: Publicador Automático de Mary (X)
+
+on:
+  schedule:
+    - cron: '30 10 * * *'  # 07:30 AM Argentina (Fitness / Gym)
+    - cron: '00 17 * * *'  # 14:00 PM Argentina (Streetwear / Café)
+    - cron: '30 21 * * *'  # 18:30 PM Argentina (Pregunta / Engagement)
+    - cron: '30 01 * * *'  # 22:30 PM Argentina (After Dark / VIP)
+  workflow_dispatch:
+
+jobs:
+  post_tweet:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Descargar repositorio
+        uses: actions/checkout@v4
+
+      - name: Configurar Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Instalar dependencias
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          playwright install chromium --with-deps
+
+      - name: Publicar Tweet en X
+        env:
+          X_AUTH_TOKEN: ${{ secrets.X_AUTH_TOKEN }}
+          MARY_TELEGRAM_VIP: ${{ secrets.MARY_TELEGRAM_VIP }}
+        run: python bot_cloud.py --post now
