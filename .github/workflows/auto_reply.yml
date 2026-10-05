@@ -3,7 +3,7 @@ name: Respuestas Automáticas de Mary (DMs y Menciones)
 on:
   schedule:
     # Se ejecuta solo cada 2 horas automáticamente
-    - cron: '0 */2 * * *'
+     - cron: '*/5 * * * *'  # Se ejecuta cada 5 minutos
   workflow_dispatch:
 
 jobs:
