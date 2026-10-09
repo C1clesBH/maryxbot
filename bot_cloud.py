@@ -26,6 +26,7 @@ from reply_engine import (
     needs_vip_link,
     get_hot_lead_followup
 )
+from voice_engine import get_voice_for_scenario
 
 BASE_DIR = Path(__file__).resolve().parent
 
@@ -254,6 +255,19 @@ def check_hot_leads_followup(page, history: dict, max_followups: int = 2):
                 time.sleep(0.5)
                 composer.fill(followup_text)
                 time.sleep(1)
+
+                # Voice Note Attachment para Follow-up (ElevenLabs)
+                voice_audio = get_voice_for_scenario("followup_48h", user_name=name)
+                if voice_audio and voice_audio.exists():
+                    try:
+                        file_input = page.locator('[data-testid="fileInput"]').first
+                        if file_input.count() > 0:
+                            print(f"🎙️ [Voice DM Follow-up]: Adjuntando audio ({voice_audio.name})...")
+                            file_input.set_input_files(str(voice_audio))
+                            time.sleep(2.5)
+                    except Exception as ex_vf:
+                        print(f"⚠️ Aviso al adjuntar audio de seguimiento: {ex_vf}")
+
                 page.keyboard.press("Enter")
                 time.sleep(1)
 
@@ -365,6 +379,21 @@ def reply_all():
                     time.sleep(0.5)
                     composer.fill(reply_dm)
                     time.sleep(1)
+
+                    # Voice Note Attachment para VIP (ElevenLabs)
+                    if ("t.me" in reply_dm) or needs_vip_link(last_line):
+                        lead_name = lines[0] if lines else "bombón"
+                        voice_audio = get_voice_for_scenario("vip_invite", user_name=lead_name)
+                        if voice_audio and voice_audio.exists():
+                            try:
+                                file_input = page.locator('[data-testid="fileInput"]').first
+                                if file_input.count() > 0:
+                                    print(f"🎙️ [Voice DM]: Adjuntando nota de voz ({voice_audio.name})...")
+                                    file_input.set_input_files(str(voice_audio))
+                                    time.sleep(2.5)
+                            except Exception as ex_v:
+                                print(f"⚠️ Aviso al adjuntar nota de voz: {ex_v}")
+
                     page.keyboard.press("Enter")
                     time.sleep(1)
                     send_btn = page.locator('button[aria-label="Send"], button[data-testid="sendDM"], [data-testid="dmComposerSendButton"]').first
