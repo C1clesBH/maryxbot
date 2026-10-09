@@ -20,9 +20,9 @@ AUDIO_DIR = BASE_DIR / "assets" / "audio"
 AUDIO_DIR.mkdir(parents=True, exist_ok=True)
 
 # Variables de configuración (pueden venir de GitHub Secrets o entorno local)
-ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY", "").strip()
-# Default voice: Rachel o voz seleccionada por el usuario
-ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "21m00Tcm4TlvDq8ikWAM").strip()
+ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY", "sk_d1741fd86d3fc1b16a70a352fedc163060a18d0a9dce786b").strip()
+# Voz Sarah (EXAVITQu4vr4xnSDxMaL): Tono joven, dulce, íntimo y seductor para Mary
+ELEVENLABS_VOICE_ID = os.getenv("ELEVENLABS_VOICE_ID", "EXAVITQu4vr4xnSDxMaL").strip()
 
 # Configuración acústica para lograr tono coqueto, cálido y natural (rioplatense/latino)
 VOICE_SETTINGS = {

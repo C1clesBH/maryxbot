@@ -8,6 +8,13 @@
 
 import os
 import sys
+
+if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
+
 from voice_engine import generate_tts, GOLDEN_AUDIO_SCRIPTS, is_elevenlabs_configured
 
 def generate_all():
