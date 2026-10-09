@@ -304,29 +304,49 @@ def reply_all():
             time.sleep(3.5)
 
             tweets = page.locator('article[data-testid="tweet"]')
-            count = min(tweets.count(), 5)
+            count = min(tweets.count(), 8)
             for i in range(count):
                 tweet = tweets.nth(i)
-                txt = tweet.inner_text()
+                txt = tweet.inner_text().strip()
+
+                # Obtener ID único permanente del tweet
+                status_link = tweet.locator('a[href*="/status/"]').first
+                tweet_href = status_link.get_attribute("href") if status_link.count() > 0 else ""
+                tweet_id = tweet_href.split("/status/")[-1].split("?")[0].split("/")[0] if "/status/" in tweet_href else ""
+                clean_id = tweet_id if tweet_id else hash_text(txt.splitlines()[0] if txt else "")
+
+                # Evitar auto-responder a tweets de Mary
                 if "heymaryfit" in txt[:50] and txt.count("@heymaryfitiq") == 1:
                     continue
-                h = hash_text(txt[:100])
-                if h in history["mentions"]:
+
+                # Si ya fue respondido este tweet específico, OMITIR INMEDIATAMENTE
+                if clean_id in history["mentions"] or (tweet_id and tweet_id in history["mentions"]):
                     continue
+
+                # Auto-Like a la mención del fan si no lo tiene
+                like_btn = tweet.locator('[data-testid="like"]').first
+                if like_btn.count() > 0 and like_btn.is_visible():
+                    try:
+                        like_btn.click()
+                        time.sleep(1)
+                    except Exception:
+                        pass
 
                 reply = get_smart_reply(txt, is_dm=False)
                 reply_btn = tweet.locator('[data-testid="reply"]').first
                 if reply_btn.count() > 0:
                     reply_btn.click()
-                    time.sleep(1)
+                    time.sleep(1.5)
                     box = page.locator('[data-testid="tweetTextarea_0"]').first
                     box.wait_for(state="visible", timeout=8000)
                     box.fill(reply)
                     time.sleep(1)
                     page.locator('[data-testid="tweetButton"]').first.click()
                     time.sleep(3)
-                    print(f"✅ [Mención respondida]: {reply}")
-                    history["mentions"].append(h)
+                    print(f"✅ [Mención respondida]: {reply} (ID: {clean_id})")
+                    history["mentions"].append(clean_id)
+                    if tweet_id:
+                        history["mentions"].append(tweet_id)
                     save_history(history)
                     time.sleep(2)
 
@@ -358,26 +378,23 @@ def reply_all():
                 if last_line.startswith("You:") or last_line.startswith("Tú:") or "You:" in last_line or "Tú:" in last_line:
                     continue
 
-                h_c = hash_text(f"{href}_{txt_c}")
-                if h_c in history["dms"]:
+                # Hash basado estrictamente en el último mensaje para ignorar cambios de tiempo relativo ("20m", "1h")
+                msg_hash = hash_text(f"{href}_{last_line}")
+                if msg_hash in history["dms"]:
                     continue
 
                 print(f"[*] Nuevo mensaje pendiente en {href}:\n    \"{last_line}\"")
                 c.click()
-                time.sleep(3)
+                time.sleep(3.5)
                 unlock_chat_if_needed(page)
 
-                composer = page.get_by_placeholder("Message").first
-                if composer.count() == 0:
-                    composer = page.locator('[data-testid="dmComposerTextInput"]').first
-                if composer.count() == 0:
-                    composer = page.locator('[role="textbox"]').last
-
+                composer = page.locator('div[role="textbox"], [data-testid="dmComposerTextInput"], [placeholder="Message"], [placeholder="Enviar un mensaje"]')
                 if composer.count() > 0:
                     reply_dm = get_smart_reply(last_line, is_dm=True)
-                    composer.click()
+                    comp = composer.first
+                    comp.click()
                     time.sleep(0.5)
-                    composer.fill(reply_dm)
+                    comp.fill(reply_dm)
                     time.sleep(1)
 
                     # Voice Note Attachment para VIP (ElevenLabs)
@@ -401,7 +418,7 @@ def reply_all():
                         send_btn.click()
                     time.sleep(3)
                     print(f"✅ [DM respondido con éxito]: {reply_dm}")
-                    history["dms"].append(h_c)
+                    history["dms"].append(msg_hash)
 
                     # --- CRM HOT LEADS TRACKING ---
                     is_vip_sent = ("t.me" in reply_dm) or needs_vip_link(last_line)
@@ -428,63 +445,78 @@ def reply_all():
 
             # 3. Solicitudes de mensajes (Personas nuevas que no seguimos)
             print("\n📬 [CLOUD] Revisando Solicitudes de Mensajes (cuentas nuevas)...")
-            for req_url in ["https://x.com/i/chat/requests", "https://x.com/i/chat/requests/other"]:
+            for req_url in ["https://x.com/i/chat/requests/other", "https://x.com/i/chat/requests"]:
                 try:
                     page.goto(req_url, timeout=45000)
                     page.wait_for_load_state("domcontentloaded")
                     time.sleep(4)
                     unlock_chat_if_needed(page)
 
-                    dismiss = page.locator("text=Dismiss").first
-                    if dismiss.count() > 0:
+                    dismiss = page.locator("text=Dismiss, text=Descartar").first
+                    if dismiss.count() > 0 and dismiss.is_visible():
                         dismiss.click()
                         time.sleep(1)
 
                     req_links = page.locator('a[href*="/i/chat/"]')
                     total_r = req_links.count()
-                    for r_idx in range(min(total_r, 4)):
-                        req_el = req_links.nth(r_idx)
+                    if total_r > 0:
+                        print(f"[*] Solicitudes pendientes detectadas en {req_url}: {total_r}")
+
+                    for r_idx in range(min(total_r, 6)):
+                        req_el = page.locator('a[href*="/i/chat/"]').nth(r_idx)
+                        if req_el.count() == 0:
+                            break
                         r_txt = req_el.inner_text().strip()
                         r_href = req_el.get_attribute("href") or f"req_{r_idx}"
-                        h_r = hash_text(f"{r_href}_{r_txt}")
+                        lines_r = [l.strip() for l in r_txt.splitlines() if l.strip()]
+                        last_msg = lines_r[-1] if lines_r else r_txt
+                        h_r = hash_text(f"{r_href}_{last_msg}")
                         if h_r in history["dms"]:
                             continue
 
+                        print(f"[+] Abriendo solicitud #{r_idx}: {r_href}...")
                         req_el.click()
-                        time.sleep(3)
+                        time.sleep(3.5)
                         unlock_chat_if_needed(page)
 
-                        accept_btn = page.get_by_role("button", name="Accept")
-                        if accept_btn.count() == 0:
-                            accept_btn = page.locator('button:has-text("Accept")')
-
-                        if accept_btn.count() > 0:
+                        # Buscar botón Accept en español o inglés
+                        accept_btn = page.locator('button:has-text("Accept"), button:has-text("Aceptar"), [data-testid*="accept"]')
+                        if accept_btn.count() > 0 and accept_btn.first.is_visible():
                             print(f"[+] Aceptando solicitud de nuevo usuario en {r_href}...")
                             accept_btn.first.click()
-                            time.sleep(3)
+                            time.sleep(4)
                             unlock_chat_if_needed(page)
 
-                        composer = page.get_by_placeholder("Message").first
-                        if composer.count() == 0:
-                            composer = page.locator('[data-testid="dmComposerTextInput"]').first
-                        if composer.count() == 0:
-                            composer = page.locator('[role="textbox"]').last
-
+                        composer = page.locator('div[role="textbox"], [data-testid="dmComposerTextInput"], [placeholder="Message"], [placeholder="Enviar un mensaje"]')
                         if composer.count() > 0:
-                            lines_r = [l.strip() for l in r_txt.splitlines() if l.strip()]
-                            last_msg = lines_r[-1] if lines_r else r_txt
+                            comp = composer.first
                             reply_text = get_smart_reply(last_msg, is_dm=True)
-                            composer.click()
+                            comp.click()
                             time.sleep(0.5)
-                            composer.fill(reply_text)
+                            comp.fill(reply_text)
                             time.sleep(1)
+
+                            # Voice Note Attachment si aplica (ElevenLabs)
+                            lead_name_req = lines_r[0] if lines_r else "bombón"
+                            if ("t.me" in reply_text) or needs_vip_link(last_msg) or any(w in last_msg.lower() for w in ["audio", "voz", "mandame un audio"]):
+                                voice_audio = get_voice_for_scenario("vip_invite", user_name=lead_name_req)
+                                if voice_audio and voice_audio.exists():
+                                    try:
+                                        file_input = page.locator('[data-testid="fileInput"]').first
+                                        if file_input.count() > 0:
+                                            print(f"🎙️ [Voice DM Solicitud]: Adjuntando audio ({voice_audio.name})...")
+                                            file_input.set_input_files(str(voice_audio))
+                                            time.sleep(2.5)
+                                    except Exception as ex_va:
+                                        print(f"⚠️ Aviso audio solicitud: {ex_va}")
+
                             page.keyboard.press("Enter")
                             time.sleep(1)
                             send_btn = page.locator('button[aria-label="Send"], button[data-testid="sendDM"], [data-testid="dmComposerSendButton"]').first
                             if send_btn.count() > 0 and send_btn.is_visible():
                                 send_btn.click()
                             time.sleep(3)
-                            print(f"✅ [Solicitud respondida]: {reply_text}")
+                            print(f"✅ [Solicitud respondida con éxito]: {reply_text}")
                             history["dms"].append(h_r)
 
                             # --- CRM HOT LEADS TRACKING EN SOLICITUDES ---
