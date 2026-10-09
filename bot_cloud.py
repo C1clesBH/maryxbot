@@ -260,11 +260,11 @@ def check_hot_leads_followup(page, history: dict, max_followups: int = 2):
                 voice_audio = get_voice_for_scenario("followup_48h", user_name=name)
                 if voice_audio and voice_audio.exists():
                     try:
-                        file_input = page.locator('[data-testid="fileInput"]').first
+                        file_input = page.locator('input[data-testid="dm-composer-file-input"], input[type="file"]').first
                         if file_input.count() > 0:
                             print(f"🎙️ [Voice DM Follow-up]: Adjuntando audio ({voice_audio.name})...")
                             file_input.set_input_files(str(voice_audio))
-                            time.sleep(2.5)
+                            time.sleep(3)
                     except Exception as ex_vf:
                         print(f"⚠️ Aviso al adjuntar audio de seguimiento: {ex_vf}")
 
@@ -403,11 +403,11 @@ def reply_all():
                         voice_audio = get_voice_for_scenario("vip_invite", user_name=lead_name)
                         if voice_audio and voice_audio.exists():
                             try:
-                                file_input = page.locator('[data-testid="fileInput"]').first
+                                file_input = page.locator('input[data-testid="dm-composer-file-input"], input[type="file"]').first
                                 if file_input.count() > 0:
                                     print(f"🎙️ [Voice DM]: Adjuntando nota de voz ({voice_audio.name})...")
                                     file_input.set_input_files(str(voice_audio))
-                                    time.sleep(2.5)
+                                    time.sleep(3)
                             except Exception as ex_v:
                                 print(f"⚠️ Aviso al adjuntar nota de voz: {ex_v}")
 
@@ -502,11 +502,11 @@ def reply_all():
                                 voice_audio = get_voice_for_scenario("vip_invite", user_name=lead_name_req)
                                 if voice_audio and voice_audio.exists():
                                     try:
-                                        file_input = page.locator('[data-testid="fileInput"]').first
+                                        file_input = page.locator('input[data-testid="dm-composer-file-input"], input[type="file"]').first
                                         if file_input.count() > 0:
                                             print(f"🎙️ [Voice DM Solicitud]: Adjuntando audio ({voice_audio.name})...")
                                             file_input.set_input_files(str(voice_audio))
-                                            time.sleep(2.5)
+                                            time.sleep(3)
                                     except Exception as ex_va:
                                         print(f"⚠️ Aviso audio solicitud: {ex_va}")
 
