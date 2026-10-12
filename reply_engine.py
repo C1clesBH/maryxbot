@@ -114,6 +114,17 @@ HOT_LEAD_FOLLOWUP_TEMPLATES = [
     "¡Hey lindo! Pasaba a saludarte y ver si ya me tenés en tu Telegram privado 💋 Avisame cuando estés adentro así charlamos por allá: {vip_link} ✨"
 ]
 
+COMMENT_REWARD_TEMPLATES = [
+    "¡Hola {name}! Vi que me dejaste un comentario en mi foto... como te prometí, acá tenés mi audio privado 💋 y en mi canal VIP de Telegram te dejé la sesión completa sin censura: {vip_link} ✨",
+    "¡Buenas {name}! Gracias por el aguante en mi publicación bombón 🤭 Te paso esta nota de voz para que me conozcas mejor... y en mi Telegram privado tenés cositas mucho más íntimas esperándote: {vip_link} 🔥",
+    "¡Qué lindo leerte en mi foto {name}! Acá te mando el audio que me pediste 💋 Pasate por mi canal exclusivo que acabo de subir contenido After Dark: {vip_link} 🤍",
+    "¡Hola bombón! Cumplo con mi promesa de la foto 🙈 Acá tenés mi audio privado... y en mi club privado de Telegram te dejé fotos que no puedo subir acá: {vip_link} 🔥"
+]
+
+def get_comment_reward_reply(user_name: str = "bombón") -> str:
+    template = random.choice(COMMENT_REWARD_TEMPLATES)
+    return template.format(name=user_name, vip_link=MARY_TELEGRAM_VIP)
+
 def load_history() -> dict:
     if HISTORY_FILE.exists():
         try:
@@ -129,10 +140,12 @@ def load_history() -> dict:
                     data["hot_leads"] = {}
                 if "likes" not in data:
                     data["likes"] = []
+                if "comment_dm_sent" not in data:
+                    data["comment_dm_sent"] = []
                 return data
         except Exception:
             pass
-    return {"mentions": [], "dms": [], "last_replies": [], "hot_leads": {}, "likes": []}
+    return {"mentions": [], "dms": [], "last_replies": [], "hot_leads": {}, "likes": [], "comment_dm_sent": []}
 
 def save_history(history: dict):
     try:

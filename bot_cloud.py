@@ -6,6 +6,7 @@
 
 import os
 import sys
+import re
 import time
 import argparse
 import hashlib
@@ -24,7 +25,8 @@ from reply_engine import (
     load_history,
     save_history,
     needs_vip_link,
-    get_hot_lead_followup
+    get_hot_lead_followup,
+    get_comment_reward_reply
 )
 from voice_engine import get_voice_for_scenario
 
@@ -287,6 +289,157 @@ def check_hot_leads_followup(page, history: dict, max_followups: int = 2):
                 time.sleep(3)
         except Exception as e:
             print(f"⚠️ Error al enviar seguimiento a {name}: {e}")
+
+def process_comment_dm_funnel(page, history: dict, max_conversions: int = 2):
+    """
+    Embudo Viral de Comentarios a DM (Comment-to-DM Funnel):
+    1. Abre el perfil de Mary y su último tweet publicado.
+    2. Detecta respuestas de usuarios/fans en la conversación.
+    3. Si el usuario comentó y aún no ha recibido el DM de bienvenida/recompensa:
+       a) Le da Like a su comentario.
+       b) Navega a su perfil e intenta abrir DM.
+       c) Le envía un mensaje personalizado de agradecimiento con el enlace al canal VIP de Telegram.
+       d) Adjunta la nota de voz íntima de Mary (ElevenLabs / Golden Clip).
+       e) Registra al lead en history["comment_dm_sent"] y en el CRM history["hot_leads"] para seguimiento a 48h.
+    """
+    print("\n🚀 [EMBUDO VIRAL] Buscando fans en comentarios para conversión a DM con audio VIP...")
+    conversions = 0
+    comment_dm_sent = history.setdefault("comment_dm_sent", [])
+    hot_leads = history.setdefault("hot_leads", {})
+
+    try:
+        page.goto("https://x.com/heymaryfitiq", timeout=45000)
+        page.wait_for_load_state("domcontentloaded")
+        time.sleep(3.5)
+
+        first_tweet = page.locator('article[data-testid="tweet"]').first
+        if first_tweet.count() == 0:
+            print("[*] No se encontró tweet en el perfil.")
+            return
+
+        first_tweet.click()
+        time.sleep(3.5)
+
+        thread_tweets = page.locator('article[data-testid="tweet"]')
+        total_in_thread = min(thread_tweets.count(), 10)
+        print(f"[*] Comentarios detectados en el hilo: {max(0, total_in_thread - 1)}")
+
+        for idx in range(1, total_in_thread):
+            if conversions >= max_conversions:
+                break
+
+            item = thread_tweets.nth(idx)
+            item_text = item.inner_text().strip()
+            if "@heymaryfitiq" in item_text[:40] and item_text.count("@heymaryfitiq") == 1 and len(item_text.splitlines()) < 3:
+                continue
+
+            user_handle_match = re.search(r'@([A-Za-z0-9_]{1,15})', item_text)
+            if not user_handle_match:
+                continue
+
+            user_handle = user_handle_match.group(1)
+            if user_handle.lower() == "heymaryfitiq":
+                continue
+
+            if user_handle.lower() in [h.lower() for h in comment_dm_sent]:
+                continue
+
+            first_line = item_text.splitlines()[0] if item_text.splitlines() else "bombón"
+            user_display_name = first_line.split("@")[0].strip() or "bombón"
+
+            print(f"\n🎯 [Fan detectado en comentarios]: @{user_handle} ({user_display_name})")
+
+            # 1. Dar Like al comentario
+            try:
+                like_btn = item.locator('[data-testid="like"]').first
+                if like_btn.count() > 0 and like_btn.is_visible():
+                    like_btn.click()
+                    time.sleep(1.5)
+            except Exception:
+                pass
+
+            # 2. Intentar enviarle DM desde su perfil
+            try:
+                print(f"[*] Navegando al perfil @{user_handle} para enviar DM y audio VIP...")
+                page.goto(f"https://x.com/{user_handle}", timeout=35000)
+                page.wait_for_load_state("domcontentloaded")
+                time.sleep(3)
+
+                dm_btn = page.locator('[data-testid="sendDMFromProfile"], button[aria-label*="Direct message"], button[aria-label*="Mensaje directo"]').first
+                if dm_btn.count() > 0 and dm_btn.is_visible():
+                    dm_btn.click()
+                    time.sleep(3.5)
+                    unlock_chat_if_needed(page)
+
+                    composer = page.locator('div[role="textbox"], [data-testid="dmComposerTextInput"], [placeholder="Message"], [placeholder="Enviar un mensaje"]').first
+                    if composer.count() > 0 and composer.is_visible():
+                        reward_msg = get_comment_reward_reply(user_name=user_display_name)
+                        composer.click()
+                        time.sleep(0.5)
+                        composer.fill(reward_msg)
+                        time.sleep(1)
+
+                        # Adjuntar nota de voz
+                        voice_audio = get_voice_for_scenario("vip_invite", user_name=user_display_name)
+                        if voice_audio and voice_audio.exists():
+                            try:
+                                fi = page.locator('input[data-testid="dm-composer-file-input"], input[type="file"]').first
+                                if fi.count() > 0:
+                                    print(f"🎙️ [Voice DM Embudo]: Adjuntando {voice_audio.name}...")
+                                    fi.set_input_files(str(voice_audio))
+                                    time.sleep(3.5)
+                            except Exception as ex_vdm:
+                                print(f"⚠️ Aviso al adjuntar audio: {ex_vdm}")
+
+                        send_btn = page.locator('button[aria-label="Send"], button[data-testid="sendDM"], [data-testid="dmComposerSendButton"]').first
+                        if send_btn.count() > 0 and send_btn.is_visible():
+                            send_btn.click()
+                        else:
+                            page.keyboard.press("Enter")
+                        time.sleep(4)
+
+                        print(f"🎉 ¡DM y Audio de Embudo Viral enviado a @{user_handle}!")
+                        comment_dm_sent.append(user_handle)
+                        conversions += 1
+
+                        lead_key = f"@{user_handle}"
+                        hot_leads[lead_key] = {
+                            "name": user_display_name,
+                            "handle": lead_key,
+                            "status": "vip_sent",
+                            "source": "comment_funnel",
+                            "sent_at": time.time(),
+                            "followup_sent": False,
+                            "followup_at": None,
+                            "followup_text": None
+                        }
+                        save_history(history)
+                    else:
+                        print(f"⚠️ Compositor de DM no disponible para @{user_handle}.")
+                        comment_dm_sent.append(user_handle)
+                else:
+                    print(f"ℹ️ El usuario @{user_handle} tiene sus DMs cerrados. Marcando como procesado.")
+                    comment_dm_sent.append(user_handle)
+            except Exception as ex_dm:
+                print(f"⚠️ Error enviando DM a @{user_handle}: {ex_dm}")
+                comment_dm_sent.append(user_handle)
+
+            if conversions < max_conversions:
+                page.goto("https://x.com/heymaryfitiq", timeout=35000)
+                time.sleep(3)
+                ft = page.locator('article[data-testid="tweet"]').first
+                if ft.count() > 0:
+                    ft.click()
+                    time.sleep(3)
+
+        save_history(history)
+    except Exception as e:
+        print(f"⚠️ Error general en embudo de comentarios: {e}")
+
+    if conversions > 0:
+        print(f"🔥 [Embudo Viral]: Se convirtieron {conversions} comentaristas en Leads VIP por DM.")
+    else:
+        print("[*] No se encontraron nuevos comentaristas pendientes de DM.")
 
 def reply_all():
     print("\n💬 [CLOUD] Revisando menciones y DMs pendientes...")
@@ -553,6 +706,12 @@ def reply_all():
             except Exception as ex_al:
                 print(f"⚠️ Error en Auto-Like a interacciones: {ex_al}")
 
+            # 6. Embudo Viral: Conversión automática de comentaristas a DMs con Audio VIP
+            try:
+                process_comment_dm_funnel(page, history, max_conversions=2)
+            except Exception as ex_cf:
+                print(f"⚠️ Error en Embudo Viral de comentarios: {ex_cf}")
+
         except Exception as e:
             print(f"⚠️ Error en revisión de mensajes: {e}")
         finally:
@@ -583,10 +742,11 @@ def reply_loop(total_minutes: int = 18, interval_seconds: int = 120):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("--post", nargs="?", const="now", choices=["now", "morning", "afternoon", "night", "vip", "poll"])
+    parser.add_argument("--post", nargs="?", const="now", choices=["now", "morning", "afternoon", "night", "vip", "poll", "cta"])
     parser.add_argument("--reply", action="store_true")
     parser.add_argument("--autolike", action="store_true", help="Ejecutar solo el módulo de Auto-Like a fans")
     parser.add_argument("--followup", action="store_true", help="Ejecutar solo el seguimiento a Hot Leads pendientes")
+    parser.add_argument("--funnel", action="store_true", help="Ejecutar solo el embudo viral de comentarios a DM")
     parser.add_argument("--loop", type=int, default=0, help="Minutos de duración del bucle activo (ej: 18)")
 
     args = parser.parse_args()
@@ -608,13 +768,22 @@ if __name__ == "__main__":
                 check_hot_leads_followup(page, hist, max_followups=3)
             finally:
                 browser.close()
+    elif args.funnel:
+        with sync_playwright() as p:
+            browser, context = get_browser_context(p)
+            page = context.new_page()
+            try:
+                hist = load_history()
+                process_comment_dm_funnel(page, hist, max_conversions=3)
+            finally:
+                browser.close()
     elif args.reply:
         if args.loop > 0:
             reply_loop(total_minutes=args.loop, interval_seconds=120)
         else:
             reply_all()
     elif args.post:
-        cat = "night" if args.post == "vip" else ("poll" if args.post == "poll" else args.post)
+        cat = "night" if args.post == "vip" else ("poll" if args.post == "poll" else ("viral_cta" if args.post == "cta" else args.post))
         post_tweet(category=cat)
     else:
         post_tweet(category="now")
